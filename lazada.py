@@ -209,11 +209,12 @@ async def main():
   title = ['链接','标题','主图链接','价格','尺码','颜色','代码','文字','详情图片链接']
   exportExcel(title, data,EXPORT_PATH)
 
-  print("运行完毕。。。。")
-
-  # await page.waitFor(5000)
   await page.close()
   await browser.close()
+  print("运行完毕。。。。")
+
+  # await page.waitFor(2000)
+  # deleteTemp(CHROME_USER_TEMP)
 
 asyncio.get_event_loop().run_until_complete(main())
 
