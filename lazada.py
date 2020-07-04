@@ -8,7 +8,7 @@ import shutil
 import xlsxwriter
 from lxml import etree
 from pyppeteer import launch
-
+from pyppeteer.launcher import connect
 
 #处理导出excel的数据
 def exportExcel(title, rows,path):
@@ -50,7 +50,7 @@ def deleteTemp(path):
         print("路径不存在:"+path)
         return
 
-    filelist = os.listdir(rootdir)  # 列出该目录下的所有文件名
+    filelist = os.listdir(rootdir)  # 列出该目录下的所有文件名z
     for f in filelist:
         filepath = os.path.join(rootdir, f)  # 将文件名映射成绝对路劲
         if os.path.isfile(filepath):  # 判断该文件是否为文件或者文件夹
@@ -88,19 +88,24 @@ async def main():
 
 
   deleteTemp(CHROME_USER_TEMP)
+  # browser = await launch({'headless': False,'devtools':True,'args': ['--no-sandbox', '--enable-automation','--disable-setuid-sandbox'],'executablePath': 'D:\Google\Chrome\Application\chrome.exe'})
 
-  browser = await launch({'headless': False,  'dumpio': True, 'autoClose': False,
-                          # 'executablePath': 'D:\金蚁软件\install\chrome\chrome.exe',
-                          'userDataDir':CHROME_USER_TEMP,
-  # "--load-extension={}".format(chrome_extension_path),  设置插件
-                          'args': ['--no-sandbox', '--disable-setuid-sandbox',
-                              '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
-                              '--disable-infobars', '--disable-notifications', '--start-maximized','--ignore-certificate-errors','--disable-web-security']})
+  browser = await connect({'browserWSEndpoint': 'ws://localhost:9222/devtools/page/f040b0cc-af5a-46d6-ab7a-4a9064f5588c','timeout':1000*360})
 
-  # 无痕模式，未解决打开两个浏览器
+  # browser = await launch({'headless': False,  'dumpio': True, 'autoClose': False,
+  #                         # 'executablePath': 'D:\金蚁软件\install\chrome\chrome.exe',
+  #                         'userDataDir':CHROME_USER_TEMP,
+  # # # "--load-extension={}".format(chrome_extension_path),  设置插件
+  #                         'args': ['--no-sandbox', '--disable-setuid-sandbox',
+  #                             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
+  #                             '--disable-infobars', '--disable-notifications', '--start-maximized','--ignore-certificate-errors','--disable-web-security']})
+
+  # 无痕模式，未解决打开两个浏览器 '--no-first-run',
   # browser_context = await browser.createIncognitoBrowserContext()
   # pages = await browser_context.pages();
   # page = await browser_context.newPage();
+  # browser_context = await browser.createIncognitoBrowserContext()
+  # page = await browser_context.newPage()
 
   pages = await browser.pages();
   page = pages[0] ;
@@ -150,6 +155,11 @@ async def main():
       except Exception as e:
           print(e)
           print("元素等待超时"+url)
+          page_text = await page.content()
+          # if page_text.find("dp-mod-common-image gallery-preview-panel__image") !=-1:
+          #     print("存在"+page_text)
+          # else :
+          #     print(page_text)
           urls.append(url)
           continue
 
@@ -169,27 +179,47 @@ async def main():
       skus = skus.replace(",\"skus", "}")
       print(skus)
       jsonData = json.loads(skus)
-      colorValues = jsonData['properties'][0]['values']
-      color = ",".join(map(lambda s: s["name"] ,colorValues))
 
-      sizeValues =  jsonData['properties'][1]['values'][0]["value"]
-      size  =  ",".join(map(lambda s: s["name"] ,sizeValues))
+      color=''
+      if len(jsonData['properties']) > 0:
+          colorValues = jsonData['properties'][0]['values']
+          color = ",".join(map(lambda s: s["name"] ,colorValues))
+
+      size=''
+      if len(jsonData['properties']) >1 :
+         sizeValues =  jsonData['properties'][1]['values'][0]["value"]
+         size  =  ",".join(map(lambda s: s["name"] ,sizeValues))
 
       #bloger[0].xpath('string(.)').strip() 获取标签下的所有的内容
-      chinese = tree.xpath("//div[@class ='html-content detail-content']/h2/text()")
-      chineseStr = "".join( map( lambda s:s,chinese))
-      print(chineseStr)
-      detail = tree.xpath("//div[@class='pdp-product-detail']")[0]
-      imgs = detail.xpath('.//img/@src')
-      detailsStr = ','.join(imgs) #详情的图片
+
 
       #中文的代码块, bytes 转成 string
-      chineseE = tree.xpath("//div[@class ='html-content detail-content']/h2")
+      chineseE = tree.xpath("//div[@class ='html-content detail-content']")
       if len(chineseE) >0 :
           chineseE=chineseE[0]
           chineseHtml = etree.tostring(chineseE, encoding='utf-8').decode()
+
+          # b = re.search('<img(.*)>', chineseHtml)
+          # for g in b.groups() :
+          #     print(g)
+          # skus = b.group(0)
+
       else :
           chineseHtml=""
+      # chineseStr = etree.tostring(chineseHtml, encoding='utf-8').decode()
+      chineseHtml = chineseHtml.replace('<br/>','<br/>\n')
+      dr = re.compile(r'<[^>]+>', re.S)
+      chineseStr = dr.sub('', chineseHtml)
+
+      # chineseStr = chinese.xpath('string(.)')
+
+      chineseHtml = '\n'.join( map(lambda s: s.strip() if len(s.strip()) == 0 else '<div>' + s + '</div>', chineseStr.splitlines()))
+      # print(chineseHtml)
+      # chineseStr = "".join( map( lambda s:s,chinese))
+      # print(chineseStr)
+      detail = tree.xpath("//div[@class='pdp-product-detail']")[0]
+      imgs = detail.xpath('.//img/@src')
+      detailsStr = ','.join(imgs)  # 详情的图片
 
       # print(chineseHtml)
 
@@ -199,9 +229,9 @@ async def main():
       # print(tree.xpath("//ul[@id='ladderPrice']/li[1]/div[@class='ma-spec-price ma-price-promotion']/text()"))
       # print("标题："+title)
       # 主图的链接
-      main_imgs =tree.xpath("//ul[@class='inav util-clearfix']/li/div/a[@rel='nofollow']/img/@src")
+      # main_imgs =tree.xpath("//ul[@class='inav util-clearfix']/li/div/a[@rel='nofollow']/img/@src")
 
-      page_height = await page.evaluate(pageFunction='document.body.scrollHeight ', force_expr=True)
+      # page_height = await page.evaluate(pageFunction='document.body.scrollHeight ', force_expr=True)
       data.append(list)
       end = datetime.datetime.now()
       print("耗时："+str((end - start).seconds) ) #秒
