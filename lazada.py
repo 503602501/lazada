@@ -8,6 +8,7 @@ import shutil
 import xlsxwriter
 from lxml import etree
 from pyppeteer import launch
+from pyppeteer.connection import Connection
 from pyppeteer.launcher import connect
 
 #处理导出excel的数据
@@ -75,6 +76,23 @@ def readFile(path):
     fp.close()
     return data
 
+# 请求过滤
+async def request_check(req):
+    # print(req)
+    if req.resourceType in ['image', 'media', 'eventsource', 'websocket']:
+        await req.abort()
+    else:
+        await req.continue_()
+
+async def intercept_response(res):
+    resourceType = res.request.resourceType
+    if resourceType in ['xhr', 'fetch']:
+        resp = await res.text()
+        # print(resp)
+
+
+
+
 async def main():
 
   config = configparser.ConfigParser()
@@ -88,27 +106,32 @@ async def main():
 
 
   deleteTemp(CHROME_USER_TEMP)
-  # browser = await launch({'headless': False,'devtools':True,'args': ['--no-sandbox', '--enable-automation','--disable-setuid-sandbox'],'executablePath': 'D:\Google\Chrome\Application\chrome.exe'})
+  # browser = await launch({'headless': False,'devtools':True,'args': ['--no-sandbox', '--enable-automation','--disable-setuid-sandbox'],'executablePath': 'D:\金蚁软件\install\chrome\chrome.exe'})
 
-  browser = await connect({'browserWSEndpoint': 'ws://localhost:9222/devtools/page/f040b0cc-af5a-46d6-ab7a-4a9064f5588c','timeout':1000*360})
+  browser = await connect({'headless': False,'dumpio':True,'logLevel':3,'browserWSEndpoint': 'ws://localhost:9222/devtools/browser/e852519a-a9ea-45e2-9d06-cbf3bb12e13e'})
 
   # browser = await launch({'headless': False,  'dumpio': True, 'autoClose': False,
-  #                         # 'executablePath': 'D:\金蚁软件\install\chrome\chrome.exe',
+  #                         'executablePath': "C:\\Users\\rocky\\AppData\\Local\\Chromium\\Application\\chrome.exe",
   #                         'userDataDir':CHROME_USER_TEMP,
   # # # "--load-extension={}".format(chrome_extension_path),  设置插件
   #                         'args': ['--no-sandbox', '--disable-setuid-sandbox',
-  #                             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
-  #                             '--disable-infobars', '--disable-notifications', '--start-maximized','--ignore-certificate-errors','--disable-web-security']})
+  #                             # '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
+  #                             '--disable-infobars', "--log-level=3",'--no-first-run','--disable-notifications', '--start-maximized','--ignore-certificate-errors','--disable-web-security']})
+
 
   # 无痕模式，未解决打开两个浏览器 '--no-first-run',
-  # browser_context = await browser.createIncognitoBrowserContext()
+  browser_context = await browser.createIncognitoBrowserContext()
   # pages = await browser_context.pages();
   # page = await browser_context.newPage();
   # browser_context = await browser.createIncognitoBrowserContext()
-  # page = await browser_context.newPage()
+  # page = await browser.newPage()
 
   pages = await browser.pages();
   page = pages[0] ;
+
+  await page.setRequestInterception(True)
+  page.on('request', request_check)
+  # page.on('response', intercept_response)
 
   await page.evaluateOnNewDocument('() =>{ Object.defineProperties(navigator,'  '{ webdriver:{ get: () => false } }) }')  # 本页刷新后值不变
 
@@ -187,9 +210,13 @@ async def main():
 
       size=''
       if len(jsonData['properties']) >1 :
-         sizeValues =  jsonData['properties'][1]['values'][0]["value"]
-         size  =  ",".join(map(lambda s: s["name"] ,sizeValues))
+         if  (jsonData['properties'][1]['values']) ==1:
+             sizeValues =  jsonData['properties'][1]['values'][0]["value"]
 
+         else :
+             sizeValues = jsonData['properties'][1]['values']
+
+         size  =  ",".join(map(lambda s: s["name"].replace('Int:','').replace('US:8','') ,sizeValues))
       #bloger[0].xpath('string(.)').strip() 获取标签下的所有的内容
 
 
